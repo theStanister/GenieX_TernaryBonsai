@@ -33,6 +33,7 @@ type CompletionRequest struct {
 	Compute    string `json:"compute"`
 	VitCompute string `json:"vit_compute"`
 	PowerMode  string `json:"power_mode"`
+	LlamaArgs  []string `json:"llama_args"` // llama.cpp passthrough tokens
 
 	TopK              int32   `json:"top_k"`
 	MinP              float32 `json:"min_p"`
@@ -51,6 +52,7 @@ func defaultCompletionRequest() CompletionRequest {
 		Compute:           cfg.Compute,
 		VitCompute:        cfg.VitCompute,
 		PowerMode:         cfg.PowerMode,
+		LlamaArgs:         cfg.LlamaArgs,
 		RepetitionPenalty: 1.0,
 	}
 }
@@ -133,7 +135,7 @@ func Completions(c *gin.Context) {
 		return
 	}
 
-	modelParam, err := service.ResolveModelParam(paths.RuntimeID, paths.ModelName, req.NCtx, req.Ngl, req.Compute, req.VitCompute, req.PowerMode, service.Chipset(), types.SpecParam{})
+	modelParam, err := service.ResolveModelParam(paths.RuntimeID, paths.ModelName, req.NCtx, req.Ngl, req.Compute, req.VitCompute, req.PowerMode, service.Chipset(), types.SpecParam{}, req.LlamaArgs)
 	if err != nil {
 		slog.Error("Failed to resolve model params", "model", req.Model, "error", err)
 		c.JSON(http.StatusBadRequest, map[string]any{"error": err.Error()})

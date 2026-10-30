@@ -28,7 +28,8 @@ import (
 
 var (
 	// disableStream *bool // reuse in run.go
-	ngl            int32
+	llamaFlagValues []string
+	ngl             int32
 	nctx           int32
 	ubatch         int32
 	maxTokens      int32
@@ -49,6 +50,10 @@ var (
 	draftMin       int32
 	draftPMin      float32
 	powerMode      string
+
+	// offload budget knobs (llama_cpp only)
+	unifiedBudgetMB      int32
+	offloadBudgetFraction float32
 
 	// sampler config
 	temperature       float32
@@ -103,6 +108,9 @@ var (
 		llmFlags.Int32VarP(&draftMin, "draft-min", "", 0, "min draft tokens per step (0 = llama.cpp default) (llama_cpp only)")
 		llmFlags.Float32VarP(&draftPMin, "draft-p-min", "", 0.0, "min greedy draft probability (0 = llama.cpp default) (llama_cpp only)")
 		llmFlags.StringVarP(&powerMode, "power-mode", "", "", "HTP power/clock-management mode: low_power_saver, power_saver, high_power_saver, low_balanced, balanced, high_performance, sustained_high_performance, burst (default: burst)")
+		llmFlags.StringArrayVarP(&llamaFlagValues, "llama-arg", "", nil, "llama.cpp passthrough token; may be a raw token with its dashes (\"--split-mode=layer\", \"-sm\") or a bare \"key[=value]\". Any llama.cpp option is accepted and is applied on top of the GenieX defaults (llama_cpp only)")
+		llmFlags.Int32Var(&unifiedBudgetMB, "unified-budget-mb", 0, "unified-memory offload budget in MiB for the NPU+GPU pool; 0 = derive from the system RAM fraction (llama_cpp only)")
+		llmFlags.Float32Var(&offloadBudgetFraction, "offload-budget-fraction", 0.0, "fraction of the total system RAM the NPU+GPU pool may use (default 0.50) (llama_cpp only)")
 		return llmFlags
 	}()
 	vlmFlags = func() *pflag.FlagSet {
@@ -121,7 +129,10 @@ func infer() *cobra.Command {
 		GroupID: "inference",
 		Use:     "infer <model-name>[:<precision>]",
 		Short:   "Infer with a model",
-		Long:    "Run inference with a specified model. The model must be downloaded and cached locally. Append ':<precision>' to pick a specific precision; otherwise you'll be prompted to choose one when several are cached.",
+		Long: "Run inference with a specified model. The model must be downloaded and cached locally. Append ':<precision>' to pick a specific precision; otherwise you'll be prompted to choose one when several are cached.\n\n" +
+			"llama.cpp passthrough: any llama.cpp option can be forwarded, either as --llama-<key>=<value> (e.g. --llama-split-mode=layer, --llama-tensor-split=3,1) or as a raw token through --llama-arg (e.g. --llama-arg \"--split-mode=layer\", --llama-arg \"-sm\" --llama-arg \"layer\"). The tokens are resolved against llama.cpp's own option table and applied as an override layer on top of the GenieX defaults, so anything you do not set keeps the GenieX behaviour. Sampling options (--llama-temp, --llama-top-k, --llama-top-p, --llama-min-p, --llama-seed, --llama-repeat-penalty, --llama-presence-penalty, --llama-frequency-penalty, --llama-typical-p, --llama-mirostat*, --llama-dry-*) override the sampler settings at generation time.\n\n" +
+			"Out of scope (refused before dispatch with the warning \"llama.cpp option '<name>' is out of scope for GenieX and was ignored\"): the llama-server options --host, --port, --api-key, --api-prefix, --slots, --timeout, --metrics and --props; the model-acquisition options --model, --model-url, --docker-repo and --hf-repo/--hf-file/--hf-token; the remote-backend and routing options --rpc, --alias and --tags; the file options --mmproj, --mmproj-device, --session-file, --prompt-cache-file, --logits-file, --logits-out, --lora* and --control-vector*; the grammar/schema options --grammar and --json-schema; the usage options --help, --usage and --completion; the device options --device and --dev (the device selection is owned by GenieX; use --llama-device=... or --compute instead); and the process-terminating options --cache-list, --version and --list-devices (these would otherwise kill the process). The model path, the multimodal projector path (--llama-mmproj) and the compute unit stay under the GenieX CLI's control.\n\n" +
+			"Default offload policy: with no --compute flag the model is filled NPU first, then spilled to the GPU, and the lowest-index layers stay on the CPU as a resident base tier. The NPU and the GPU share one unified memory pool, so the budget defaults to 50% of the total system RAM (tune with --unified-budget-mb / --offload-budget-fraction). An explicit --compute cpu|gpu|npu or a passthrough of --llama-split-mode / --llama-tensor-split / --llama-ngl overrides the plan. --llama-device=... is a GenieX-level override of the plan's device selection (it takes a device name, a comma-separated device list, or \"none\" to disable offloading); it is handled by GenieX itself and is never forwarded to llama.cpp's own --device option.",
 	}
 
 	inferCmd.Args = cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs)
@@ -389,6 +400,12 @@ func inferLLM(ctx context.Context, paths *geniex_sdk.ModelPaths, resolvedPowerMo
 		}
 	}
 
+	// The device selection is a GenieX-level decision (--compute and the
+	// offload planner), so the generic passthrough refuses llama.cpp's own
+	// --device/-dev. --llama-device=… is carried to the plugin through the
+	// dedicated, typed ModelConfig.LlamaDevice field instead.
+	llamaDevice, passthroughArgs := LlamaDeviceOverride(EffectiveLlamaArgs())
+
 	spin := render.NewSpinner("loading model...")
 	spin.Start()
 
@@ -398,6 +415,8 @@ func inferLLM(ctx context.Context, paths *geniex_sdk.ModelPaths, resolvedPowerMo
 		DeviceID:  deviceID,
 		Config: geniex_sdk.ModelConfig{
 			NCtx:           nctxResolved,
+			UnifiedBudgetMB:      unifiedBudgetMB,
+			OffloadBudgetFraction: offloadBudgetFraction,
 			NUbatch:        ubatch,
 			NGpuLayers:     nglResolved,
 			SpecType:       resolvedSpecType,
@@ -406,6 +425,8 @@ func inferLLM(ctx context.Context, paths *geniex_sdk.ModelPaths, resolvedPowerMo
 			SpecNMin:       draftMin,
 			SpecPMin:       draftPMin,
 			PowerMode:      resolvedPowerMode,
+			LLamaArgs:      passthroughArgs,
+			LlamaDevice:    llamaDevice,
 		},
 	})
 	spin.Stop()
@@ -553,19 +574,33 @@ func inferVLM(paths *geniex_sdk.ModelPaths, resolvedPowerMode geniex_sdk.PowerMo
 		return err
 	}
 
+	// --llama-mmproj <file> overrides the catalog mmproj path (BF16 / ternary
+	// projectors load fine against the PrismML fork).
+	mmprojPath := paths.MmprojPath
+	if v := llamaArgValue("mmproj"); v != "" {
+		mmprojPath = v
+	}
+
+	// See inferLLM: the device override travels through the typed field.
+	llamaDevice, passthroughArgs := LlamaDeviceOverride(EffectiveLlamaArgs())
+
 	spin := render.NewSpinner("loading model...")
 	spin.Start()
 	p, err := geniex_sdk.NewVLM(geniex_sdk.VlmCreateInput{
 		ModelPath:   paths.ModelPath,
-		MmprojPath:  paths.MmprojPath,
+		MmprojPath:  mmprojPath,
 		RuntimeID:   paths.RuntimeID,
 		DeviceID:    deviceID,
 		VitDeviceID: vitComputeUnit,
 		Config: geniex_sdk.ModelConfig{
-			NCtx:       nctxResolved,
-			NUbatch:    ubatch,
-			NGpuLayers: nglResolved,
-			PowerMode:  resolvedPowerMode,
+			NCtx:                nctxResolved,
+			NUbatch:             ubatch,
+			NGpuLayers:          nglResolved,
+			PowerMode:           resolvedPowerMode,
+			LLamaArgs:           passthroughArgs,
+			LlamaDevice:         llamaDevice,
+			UnifiedBudgetMB:     unifiedBudgetMB,
+			OffloadBudgetFraction: offloadBudgetFraction,
 		},
 	})
 	spin.Stop()

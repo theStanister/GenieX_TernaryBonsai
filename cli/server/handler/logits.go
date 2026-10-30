@@ -35,6 +35,7 @@ type ForwardLogitsRequest struct {
 	Compute    string `json:"compute"`
 	VitCompute string `json:"vit_compute"`
 	PowerMode  string `json:"power_mode"`
+	LlamaArgs  []string `json:"llama_args"` // llama.cpp passthrough tokens
 }
 
 const defaultLogitsTopN = 20
@@ -59,7 +60,7 @@ type ForwardRow struct {
 
 func ForwardLogits(c *gin.Context) {
 	cfg := config.Get()
-	req := ForwardLogitsRequest{NCtx: cfg.NCtx, Ngl: cfg.Ngl, Compute: cfg.Compute, VitCompute: cfg.VitCompute, PowerMode: cfg.PowerMode}
+	req := ForwardLogitsRequest{NCtx: cfg.NCtx, Ngl: cfg.Ngl, Compute: cfg.Compute, VitCompute: cfg.VitCompute, PowerMode: cfg.PowerMode, LlamaArgs: cfg.LlamaArgs}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		slog.Error("Failed to bind JSON", "error", err)
 		c.JSON(http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -81,7 +82,7 @@ func ForwardLogits(c *gin.Context) {
 		return
 	}
 
-	modelParam, err := service.ResolveModelParam(paths.RuntimeID, paths.ModelName, req.NCtx, req.Ngl, req.Compute, req.VitCompute, req.PowerMode, service.Chipset(), types.SpecParam{})
+	modelParam, err := service.ResolveModelParam(paths.RuntimeID, paths.ModelName, req.NCtx, req.Ngl, req.Compute, req.VitCompute, req.PowerMode, service.Chipset(), types.SpecParam{}, req.LlamaArgs)
 	if err != nil {
 		slog.Error("Failed to resolve model params", "model", req.Model, "error", err)
 		c.JSON(http.StatusBadRequest, map[string]any{"error": err.Error()})

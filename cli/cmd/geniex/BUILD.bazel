@@ -7,6 +7,7 @@ go_library(
         "config.go",
         "help.go",
         "infer.go",
+        "llama_flags.go",
         "main.go",
         "model.go",
         "run.go",
@@ -45,6 +46,7 @@ go_cgo_test(
     name = "geniex_test",
     srcs = [
         "infer_test.go",
+        "llama_flags_test.go",
         "model_test.go",
     ],
     embed = [":geniex_lib"],

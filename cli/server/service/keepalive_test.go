@@ -19,7 +19,7 @@ import (
 // TestResolveModelParam_PassesLlamaCppValuesThrough verifies that nctx / ngl are
 // forwarded verbatim for llama_cpp and the compute alias resolves to a device.
 func TestResolveModelParam_PassesLlamaCppValuesThrough(t *testing.T) {
-	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 2048, 10, "gpu", "", "", "", types.SpecParam{})
+	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 2048, 10, "gpu", "", "", "", types.SpecParam{}, nil)
 	if err != nil {
 		t.Fatalf("ResolveModelParam: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestResolveModelParam_PassesLlamaCppValuesThrough(t *testing.T) {
 // TestResolveModelParam_NpuAliasResolvesDevice verifies the npu alias pins HTP0
 // and passes ngl through (-1 = all layers).
 func TestResolveModelParam_NpuAliasResolvesDevice(t *testing.T) {
-	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, -1, "npu", "", "", "", types.SpecParam{})
+	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, -1, "npu", "", "", "", types.SpecParam{}, nil)
 	if err != nil {
 		t.Fatalf("ResolveModelParam: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestResolveModelParam_NpuAliasResolvesDevice(t *testing.T) {
 // TestResolveModelParam_CpuAliasZeroesGpuLayers verifies ngl 0 (pure CPU) is a
 // valid value that survives resolution.
 func TestResolveModelParam_CpuAliasZeroesGpuLayers(t *testing.T) {
-	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, 0, "cpu", "", "", "", types.SpecParam{})
+	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, 0, "cpu", "", "", "", types.SpecParam{}, nil)
 	if err != nil {
 		t.Fatalf("ResolveModelParam: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestResolveModelParam_CpuAliasZeroesGpuLayers(t *testing.T) {
 // runtimes NCtx is zeroed so the plugin's param-guard is not tripped, even when
 // the caller passes a non-zero value.
 func TestResolveModelParam_NonLlamaCppZeroesNCtx(t *testing.T) {
-	got, err := ResolveModelParam(geniex_sdk.RuntimeQairt, "some-model", 8192, 42, "", "", "", "", types.SpecParam{})
+	got, err := ResolveModelParam(geniex_sdk.RuntimeQairt, "some-model", 8192, 42, "", "", "", "", types.SpecParam{}, nil)
 	if err != nil {
 		t.Fatalf("ResolveModelParam: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestResolveModelParam_NonLlamaCppZeroesNCtx(t *testing.T) {
 // TestResolveModelParam_PowerModeResolves verifies a power_mode alias is
 // resolved to the geniex_PowerMode the SDK expects.
 func TestResolveModelParam_PowerModeResolves(t *testing.T) {
-	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, -1, "npu", "", "sustained_high_performance", "", types.SpecParam{})
+	got, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, -1, "npu", "", "sustained_high_performance", "", types.SpecParam{}, nil)
 	if err != nil {
 		t.Fatalf("ResolveModelParam: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestResolveModelParam_PowerModeResolves(t *testing.T) {
 // TestResolveModelParam_InvalidPowerMode verifies an unknown power_mode alias
 // fails fast rather than reaching the plugin.
 func TestResolveModelParam_InvalidPowerMode(t *testing.T) {
-	_, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, -1, "npu", "", "turbo", "", types.SpecParam{})
+	_, err := ResolveModelParam(geniex_sdk.RuntimeLlamaCpp, "some-model", 4096, -1, "npu", "", "turbo", "", types.SpecParam{}, nil)
 	if err == nil {
 		t.Fatal("ResolveModelParam: want error for invalid power_mode, got nil")
 	}

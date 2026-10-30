@@ -118,6 +118,23 @@ Bonus: when the `device_id` string starts with `"HTP0"`, the runtime also flips 
 
 History: the `fb98467` commit ("add device parameter") originally made `--device npu` synthesize `device_id="HTP0"`, collapsing the fast path. That was reverted (hybrid became the implicit default), then the two semantics were split into explicit `npu` / `hybrid` aliases to let callers pick.
 
+### llama.cpp passthrough (--llama-*)
+
+Any llama.cpp llama-server long option can be passed as a `--llama-<key>[=<value>]` flag (or `--llama-arg "<key>=<value>"`). Supported keys are mapped onto llama.cpp model/context params by the llama_cpp plugin; unknown keys are logged and ignored. Examples:
+
+```powershell
+# Ternary Bonsai KV-cache quantization (PrismML fork)
+geniex infer Qwen/Qwen3-0.6B-GGUF --llama-ctxk=pq2_0 --llama-ctxv=pq2_0
+
+# Flash attention / context / offload overrides
+geniex infer Qwen/Qwen3-0.6B-GGUF --llama-flash-attn=off --llama-ctx-size=32768 --llama-ngl=10
+
+# BF16 / ternary multimodal projector override
+geniex infer Org/VLM-GGUF --llama-mmproj=/path/to/mmproj.gguf
+```
+
+Supported keys: `ctx-size`, `ngl`/`gpu-layers`/`n-gpu-layers`, `flash-attn`, `cache-type-k`/`ctxk`/`ctk`, `cache-type-v`/`ctxv`/`ctv` (`pq2_0`, `ptq1_0`, `bf16`, `q8_0`, `q4_0`, …), `no-mmap`, `no-perf`, `swa-full`, `mmproj` (VLM projector override).
+
 ### Running from the CLI
 
 Use `--device` (`-d`):

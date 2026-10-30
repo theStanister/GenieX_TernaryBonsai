@@ -28,3 +28,14 @@ modelfiles/*
 
 .gradle/
 *.log
+
+# Staged release tree produced by scripts/stage-output.cmd (build artifacts only).
+# Any staging directory variant is ignored ("output", "output - Copy", ...).
+output*/
+
+# Temporary scratch files produced by engineering work (plans, audits, ...).
+.tmp_*
+
+# Local scratch dir for the go build workaround (object files, import libs, copied DLL).
+build-cli/
+temp/*

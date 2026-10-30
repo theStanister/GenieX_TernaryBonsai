@@ -19,6 +19,62 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+// SplitDeviceOverride extracts llama.cpp's device option ("device" / "dev")
+// from a passthrough token list and returns it separately.
+//
+// The llama_cpp plugin refuses llama.cpp's own --device/-dev passthrough option
+// (see sdk/plugins/llama_cpp/src/passthrough.cpp), so the device selection is
+// carried on the dedicated, typed ModelConfig.LlamaDevice field instead.
+// Returns the extracted value ("" when there was none) and the remaining
+// tokens with the device tokens removed.
+func SplitDeviceOverride(args []string) (string, []string) {
+	value := ""
+	rest := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		tok := args[i]
+		key, val, hasValue := splitLlamaArgToken(tok)
+		if key != "device" && key != "dev" {
+			rest = append(rest, tok)
+			continue
+		}
+		if hasValue {
+			if value == "" {
+				value = val
+			}
+			continue
+		}
+		// "device" / "dev" with the value in the next token.
+		if i+1 < len(args) {
+			if !strings.HasPrefix(args[i+1], "--") {
+				if value == "" {
+					value = args[i+1]
+				}
+				i++
+				continue
+			}
+		}
+	}
+	return value, rest
+}
+
+// splitLlamaArgToken normalizes one passthrough token into (key, value,
+// hasValue). The key never carries leading dashes, so "split-mode=layer",
+// "--split-mode=layer" and "-sm" all normalize to their bare option name.
+func splitLlamaArgToken(token string) (key, value string, hasValue bool) {
+	t := strings.TrimSpace(token)
+	if t == "" {
+		return "", "", false
+	}
+	t = strings.TrimLeft(t, "-")
+	if t == "" {
+		return "", "", false
+	}
+	if i := strings.IndexByte(t, '='); i >= 0 {
+		return t[:i], t[i+1:], true
+	}
+	return t, "", false
+}
+
 func SaveURIToTempFile(uri string) (string, error) {
 	u, err := url.Parse(uri)
 	if err != nil {

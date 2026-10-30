@@ -38,6 +38,7 @@ func serve() *cobra.Command {
 	serveCmd.Flags().String("vit-compute", "", "Default VLM vision encoder compute unit, e.g. CPU or HTP2 (env: GENIEX_VIT_COMPUTE)")
 	serveCmd.Flags().String("power-mode", "", "Default HTP power/clock-management mode: low_power_saver, power_saver, high_power_saver, low_balanced, balanced, high_performance, sustained_high_performance, burst (default: burst) (env: GENIEX_POWER_MODE)")
 	serveCmd.Flags().String("qairt-lib", "", "Run against a different QAIRT runtime: path to a QAIRT SDK root or a folder of QNN libraries, qairt only (env: GENIEX_QAIRT_LIB)")
+	serveCmd.Flags().StringArray("llama-arg", nil, "Default llama.cpp passthrough token (\"key\" or \"key=value\"): e.g. --llama-arg cache-type-k=pq2_0 --llama-arg flash-attn=off (env: GENIEX_LLAMA_ARGS)")
 	// HTTPS / TLS flags
 	serveCmd.Flags().Bool("https", false, "Enable HTTPS/TLS (env: GENIEX_HTTPS)")
 	serveCmd.Flags().String("certfile", "cert.pem", "TLS certificate file path (env: GENIEX_CERTFILE)")
@@ -54,15 +55,24 @@ func serve() *cobra.Command {
 	viper.BindPFlag("powermode", serveCmd.Flags().Lookup("power-mode"))
 	viper.BindEnv("powermode", "GENIEX_POWER_MODE")
 	viper.BindPFlag("qairtlib", serveCmd.Flags().Lookup("qairt-lib"))
+	viper.BindPFlag("llamaargs", serveCmd.Flags().Lookup("llama-arg"))
 	// Bound explicitly so the plugin's own spelling is the only one that works;
 	// AutomaticEnv would otherwise make GENIEX_QAIRTLIB a silent second alias.
 	viper.BindEnv("qairtlib", "GENIEX_QAIRT_LIB")
+	viper.BindEnv("llamaargs", "GENIEX_LLAMA_ARGS")
 	viper.BindPFlag("enablehttps", serveCmd.Flags().Lookup("https"))
 	viper.BindPFlag("certfile", serveCmd.Flags().Lookup("certfile"))
 	viper.BindPFlag("keyfile", serveCmd.Flags().Lookup("keyfile"))
 
 	serveCmd.Run = func(cmd *cobra.Command, args []string) {
 		checkAudioDependency()
+
+		// Merge generic --llama-* flags (recovered from os.Args before pflag
+		// parsing) into the server's per-model llama.cpp passthrough defaults so
+		// `geniex serve --llama-ctxk=pq2_0` works like the explicit --llama-arg.
+		if len(llamaPassthrough) > 0 {
+			viper.Set("llamaargs", append(viper.GetStringSlice("llamaargs"), llamaPassthrough...))
+		}
 
 		// Handed to the SDK rather than exported, matching `infer`; every model the server
 		// loads, LLM or VLM, then goes through the same SDK-side resolution.

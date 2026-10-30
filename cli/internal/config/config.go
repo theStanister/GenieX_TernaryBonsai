@@ -27,6 +27,9 @@ type Config struct {
 	Compute    string // Default compute unit: cpu, gpu, npu, hybrid (default: "")
 	VitCompute string // Default VLM vision encoder compute unit (default: "")
 	PowerMode  string // Default HTP power/clock-management mode (default: "" = burst)
+	// LlamaArgs are llama_cpp passthrough tokens ("key"/"key=value") applied to
+	// every model load by default (default: empty).
+	LlamaArgs []string `mapstructure:"llamaargs"`
 	// HTTPS / TLS settings
 	HTTPS    bool   // Whether to serve over HTTPS (default: false)
 	CertFile string // TLS certificate file path

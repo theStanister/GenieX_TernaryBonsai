@@ -1,6 +1,6 @@
 [submodule "third-party/llama.cpp"]
 	path = third-party/llama.cpp
-	url = https://github.com/ggml-org/llama.cpp
+	url = https://github.com/PrismML-Eng/llama.cpp
 [submodule "third-party/geniex-qairt"]
 	path = third-party/geniex-qairt
 	url = https://github.com/qualcomm/geniex-qairt-plugin

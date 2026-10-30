@@ -40,7 +40,7 @@ func resolveDraftModelPath(draft string) (string, error) {
 // keys on. Compute is resolved to a DeviceID by the SDK; nctx/ngl are
 // llama_cpp-only and zeroed for other plugins. power_mode is shared by both
 // plugins and resolved here, once, into the geniex_PowerMode the SDK expects.
-func ResolveModelParam(runtimeID, modelName string, reqNCtx, reqNgl int32, reqCompute, reqVitCompute, reqPowerMode, chipset string, spec types.SpecParam) (types.ModelParam, error) {
+func ResolveModelParam(runtimeID, modelName string, reqNCtx, reqNgl int32, reqCompute, reqVitCompute, reqPowerMode, chipset string, spec types.SpecParam, llamaArgs []string) (types.ModelParam, error) {
 	// Non-llama_cpp plugins (e.g. qairt) reject non-zero nctx; the SDK zeroes
 	// ngl for them in geniex_resolve_device.
 	nctx, ngl := reqNCtx, reqNgl
@@ -78,9 +78,14 @@ func ResolveModelParam(runtimeID, modelName string, reqNCtx, reqNgl int32, reqCo
 		VitDeviceID: reqVitCompute,
 		PowerMode:   resolvedPowerMode,
 	}
-	// Spec is llama_cpp-only; leave it zero (disabled) for other plugins.
+	// Spec / LlamaArgs are llama_cpp-only; leave them zero for other plugins.
 	if runtimeID == geniex_sdk.RuntimeLlamaCpp {
 		mp.Spec = spec
+		// The llama_cpp plugin refuses llama.cpp's own --device/-dev option, so
+		// the device selection travels on the dedicated, typed LlamaDevice field.
+		llamaDevice, rest := utils.SplitDeviceOverride(llamaArgs)
+		mp.LlamaDevice = llamaDevice
+		mp.LlamaArgs   = rest
 	}
 	return mp, nil
 }
@@ -228,6 +233,8 @@ func keepAliveGet[T any](name string, param types.ModelParam, session utils.Sess
 				SpecNMin:       param.Spec.NMin,
 				SpecPMin:       param.Spec.PMin,
 				PowerMode:      param.PowerMode,
+				LLamaArgs:      param.LlamaArgs,
+				LlamaDevice:   param.LlamaDevice,
 			},
 			RuntimeID: paths.RuntimeID,
 		})
@@ -240,7 +247,9 @@ func keepAliveGet[T any](name string, param types.ModelParam, session utils.Sess
 			Config: geniex_sdk.ModelConfig{
 				NCtx:       param.NCtx,
 				NGpuLayers: param.NGpuLayers,
-				PowerMode:  param.PowerMode,
+				PowerMode:    param.PowerMode,
+				LLamaArgs:    param.LlamaArgs,
+				LlamaDevice: param.LlamaDevice,
 			},
 			RuntimeID: paths.RuntimeID,
 		})

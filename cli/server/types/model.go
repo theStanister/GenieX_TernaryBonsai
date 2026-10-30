@@ -16,6 +16,15 @@ type ModelParam struct {
 	VitDeviceID string
 	PowerMode   geniex_sdk.PowerMode
 	Spec        SpecParam
+	// LlamaArgs is the llama.cpp passthrough ("key"/"key=value" tokens) applied
+	// at model load. Populated from the request body / server --llama-arg
+	// defaults; ignored by non-llama_cpp runtimes.
+	LlamaArgs []string
+	// LlamaDevice is the typed offload-device override ("none", or a
+	// comma-separated device list). It is carried on its own because the
+	// llama_cpp plugin refuses llama.cpp's own --device/-dev passthrough option;
+	// the value is split out of LlamaArgs before they reach the plugin.
+	LlamaDevice string
 }
 
 // SpecParam bundles the speculative-decoding knobs sourced from a request; all

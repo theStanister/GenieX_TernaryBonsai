@@ -36,6 +36,7 @@ type ChatCompletionRequest struct {
 	Compute     string `json:"compute"`
 	VitCompute  string `json:"vit_compute"`
 	PowerMode   string `json:"power_mode"`
+	LlamaArgs   []string `json:"llama_args"` // llama.cpp passthrough tokens; defaults to the server --llama-arg when omitted
 
 	// "" / "none" keeps thinking inline in content (default); "deepseek" /
 	// "deepseek-legacy" / "auto" move it to reasoning_content.
@@ -72,6 +73,7 @@ func defaultChatCompletionRequest() ChatCompletionRequest {
 		Compute:           cfg.Compute,
 		VitCompute:        cfg.VitCompute,
 		PowerMode:         cfg.PowerMode,
+		LlamaArgs:         cfg.LlamaArgs,
 		TopK:              0,
 		MinP:              0.0,
 		RepetitionPenalty: 1.0,
@@ -107,7 +109,7 @@ func ChatCompletions(c *gin.Context) {
 		NMax:       param.SpecNMax,
 		NMin:       param.SpecNMin,
 		PMin:       param.SpecPMin,
-	})
+	}, param.LlamaArgs)
 	if err != nil {
 		slog.Error("Failed to resolve model params", "model", param.Model, "error", err)
 		c.JSON(http.StatusBadRequest, map[string]any{"error": err.Error()})

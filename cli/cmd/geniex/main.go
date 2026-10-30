@@ -150,6 +150,11 @@ func main() {
 	common.ApplySlog()
 	common.EnableUTF8Console()
 
+	// Collect any "--llama-*" llama.cpp passthrough flags before cobra/pflag
+	// parses them (pflag would otherwise reject unknown flags). The tokens are
+	// forwarded to the llama_cpp plugin via ModelConfig.LLamaArgs.
+	os.Args = extractLlamaArgs(os.Args)
+
 	cmd := RootCmd()
 	applyHelpStyle(cmd)
 	cmd.SetErr(render.NewStyledWriter(os.Stderr, render.GetTheme().Error))
